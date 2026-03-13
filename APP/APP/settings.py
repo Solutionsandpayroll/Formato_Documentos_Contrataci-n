@@ -129,8 +129,8 @@ STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')] # Si tienes una carpeta st
 
 # MEDIA no se puede usar directamente en Serverless
 # Comentamos para pruebas
-# MEDIA_URL = '/media/'
-# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 ALLOWED_HOSTS = ["*"]
 
