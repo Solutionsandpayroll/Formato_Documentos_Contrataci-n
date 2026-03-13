@@ -33,7 +33,7 @@ def subir_excel(request):
             # Convertimos a JSON para persistirlo en la sesión
             excel_json = df.to_json(date_format='iso', orient='split')
             
-            # Guardamos en la sesión (usamos una clave única, por ejemplo 'excel_data')
+            # Guardamos en la sesión
             request.session['excel_data'] = excel_json
             
             personas = []
@@ -49,7 +49,6 @@ def subir_excel(request):
             
             return render(request, "seleccionar_persona.html", {
                 "personas": personas,
-                # Ya no enviamos el JSON al template
             })
         except Exception as e:
             messages.error(request, f"Error al procesar Excel: {str(e)}")
@@ -76,7 +75,8 @@ def generar_word(request):
             tipo_contrato_seleccionado = request.POST.get("tipo_contrato")
 
             # --- PROCESAMIENTO DE FECHAS ---
-            col_fecha = next((c for c in df.columns if "INGRESO" in c.upper()), None)
+            # Convertir nombres de columna a string antes de aplicar .upper()
+            col_fecha = next((c for c in df.columns if "INGRESO" in str(c).upper()), None)
             if col_fecha is not None:
                 fecha_ingreso_str = formatear_fecha_texto(fila[col_fecha])
             else:
@@ -153,7 +153,7 @@ def generar_word(request):
             elif tipo_contrato_seleccionado == "Fijo Integral":
                 mapa_plantillas["CONTRATO"] = "EmploymentContract_FixedTerm_Integral Salary-copia.docx"
             elif tipo_contrato_seleccionado == "Fijo":
-                mapa_plantillas["CONTRATO"] = "EmploymentContract_FixedTerm_Ordinary Salary-copia.docx"  # Corregido
+                mapa_plantillas["CONTRATO"] = "EmploymentContract_FixedTerm_Ordinary Salary-copia.docx"
 
             seleccionados = request.POST.getlist("archivos_a_generar")
             
