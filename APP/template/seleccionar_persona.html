@@ -406,10 +406,9 @@
             <p>Generando documentos...</p>
         </div>
 
-        <form action="{% url 'generar_word' %}" method="POST">
-        {% csrf_token %}
-        
-        <input type="hidden" name="excel_data_input" value="{{ excel_data_input }}">
+        <form method="POST" action="{% url 'generar_word' %}" id="mainForm">
+            {% csrf_token %}
+            <input type="hidden" name="persona_index" id="p_idx">
 
             <!-- ── PASO 1 ── -->
             <div class="step active" id="paso1">
