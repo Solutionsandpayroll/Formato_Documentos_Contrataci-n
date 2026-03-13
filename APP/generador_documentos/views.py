@@ -2,7 +2,6 @@ import io
 import os
 import pandas as pd
 import zipfile
-import json
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.contrib import messages
@@ -22,7 +21,7 @@ def formatear_fecha_texto(fecha_raw):
         return str(fecha_raw)
 
 def subir_excel(request):
-    """ VISTA 1: Procesa el Excel y muestra la lista de personas directamente """
+    """ VISTA 1: Maneja la carga y muestra la lista de personas en la misma respuesta """
     if request.method == "POST" and "archivo_excel" in request.FILES:
         excel = request.FILES["archivo_excel"]
         if not excel.name.endswith(('.xlsx', '.xls')):
@@ -31,7 +30,7 @@ def subir_excel(request):
 
         try:
             df = pd.read_excel(excel)
-            # Convertimos el DF a JSON para pasarlo al template
+            # Convertimos a JSON para persistirlo en el HTML (campo oculto)
             excel_json = df.to_json(date_format='iso', orient='split')
             
             personas = []
@@ -45,9 +44,10 @@ def subir_excel(request):
                     "direccion": str(f.get("DIRECCION", "")),
                 })
             
+            # IMPORTANTE: Renderizamos la segunda pantalla pasándole los datos del excel
             return render(request, "seleccionar_persona.html", {
                 "personas": personas,
-                "excel_data_input": excel_json 
+                "excel_data_input": excel_json
             })
         except Exception as e:
             messages.error(request, f"Error al procesar Excel: {str(e)}")
@@ -55,19 +55,14 @@ def subir_excel(request):
 
     return render(request, "subir_excel.html")
 
-
 def generar_word(request):
-    """ VISTA 2: Recibe los datos del formulario y el JSON del excel original """
-    # Recuperamos el JSON del campo oculto enviado por POST
+    """ VISTA 2: Recibe los datos y genera el ZIP """
+    # Recuperamos el JSON que viene desde el campo oculto del formulario
     excel_data_raw = request.POST.get("excel_data_input")
     
-    if not excel_data_raw:
-        # Si no hay datos (ej. recarga de página directa), volvemos al inicio
-        return redirect('subir_excel_view')
-
-    if request.method == "POST":
+    if request.method == "POST" and excel_data_raw:
         try:
-            # Reconstruimos el DataFrame desde el input oculto
+            # Reconstruimos el DataFrame desde el string JSON
             df = pd.read_json(io.StringIO(excel_data_raw), orient='split')
             idx = int(request.POST.get("persona_index"))
             fila = df.iloc[idx]
@@ -90,7 +85,7 @@ def generar_word(request):
             except:
                 salario_formateado = salario_raw
 
-            # --- PROCESAMIENTO NACIMIENTO ---
+            # --- PROCESAMIENTO LUGAR Y FECHA NACIMIENTO ---
             lugar_nac = request.POST.get("lugar_nacimiento", "")
             fecha_nac_raw = request.POST.get("fecha_nacimiento", "")
             fecha_nac_texto = formatear_fecha_texto(fecha_nac_raw)
@@ -179,4 +174,5 @@ def generar_word(request):
             messages.error(request, f"Error: {str(e)}")
             return redirect('subir_excel_view')
 
+    # Si alguien entra a /colaboradores/ por GET, lo mandamos a subir el archivo
     return redirect('subir_excel_view')
