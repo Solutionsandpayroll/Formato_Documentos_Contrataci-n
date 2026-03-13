@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
+        /* (Mantén todo el estilo exactamente igual que en tu código original) */
         :root {
             --azul-oscuro: #162b47;
             --azul-medio: #105788;
@@ -351,15 +352,15 @@
 
 <!-- ═══════════ HEADER ═══════════ -->
 <header>
-        <div class="header-logo">
-            <img src="{% static 'img/logo_fondo_oscuro.png' %}" alt="Logo" style="height:80px;"> 
-            <div class="header-divider"></div>
-            <div class="header-title">
-                Documentos Contratación
-                <span>Gestión Documental</span>
-            </div>
+    <div class="header-logo">
+        <img src="{% static 'img/logo_fondo_oscuro.png' %}" alt="Logo" style="height:80px;"> 
+        <div class="header-divider"></div>
+        <div class="header-title">
+            Documentos Contratación
+            <span>Gestión Documental</span>
         </div>
-    </header>
+    </div>
+</header>
 
 <!-- ═══════════ MAIN ═══════════ -->
 <main>
@@ -408,6 +409,8 @@
 
         <form method="POST" action="{% url 'generar_word' %}" id="mainForm">
             {% csrf_token %}
+            <!-- Campo oculto con los datos del Excel (CORREGIDO) -->
+            <input type="hidden" name="excel_data_input" value="{{ excel_data_input|safe }}">
             <input type="hidden" name="persona_index" id="p_idx">
 
             <!-- ── PASO 1 ── -->
@@ -842,7 +845,8 @@
     document.getElementById('mainForm').onsubmit = function (e) {
         if (!this.checkValidity()) return true;
         document.getElementById('loader').style.display = 'flex';
-        setTimeout(() => { cerrarModal(); }, 4000);
+        // No cerramos el modal aquí para que el usuario vea el loader hasta que termine la descarga
+        // La redirección/descarga cerrará la ventana
     };
 
     // ── Alertas Django ──

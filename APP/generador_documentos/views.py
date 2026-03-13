@@ -9,7 +9,7 @@ from django.conf import settings
 from docxtpl import DocxTemplate
 
 def formatear_fecha_texto(fecha_raw):
-    """ Función auxiliar para convertir fecha a formato: 13 de marzo de 2026 """
+    """ Convierte fecha a formato: 13 de marzo de 2026 """
     if not fecha_raw or pd.isna(fecha_raw):
         return ""
     meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", 
@@ -21,7 +21,7 @@ def formatear_fecha_texto(fecha_raw):
         return str(fecha_raw)
 
 def subir_excel(request):
-    """ VISTA 1: Maneja la carga y muestra la lista de personas en la misma respuesta """
+    """ Vista que recibe el archivo Excel y muestra la lista de personas """
     if request.method == "POST" and "archivo_excel" in request.FILES:
         excel = request.FILES["archivo_excel"]
         if not excel.name.endswith(('.xlsx', '.xls')):
@@ -44,7 +44,6 @@ def subir_excel(request):
                     "direccion": str(f.get("DIRECCION", "")),
                 })
             
-            # IMPORTANTE: Renderizamos la segunda pantalla pasándole los datos del excel
             return render(request, "seleccionar_persona.html", {
                 "personas": personas,
                 "excel_data_input": excel_json
@@ -56,7 +55,7 @@ def subir_excel(request):
     return render(request, "subir_excel.html")
 
 def generar_word(request):
-    """ VISTA 2: Recibe los datos y genera el ZIP """
+    """ Vista que genera el ZIP con los documentos """
     # Recuperamos el JSON que viene desde el campo oculto del formulario
     excel_data_raw = request.POST.get("excel_data_input")
     
@@ -71,8 +70,13 @@ def generar_word(request):
             tipo_contrato_seleccionado = request.POST.get("tipo_contrato")
 
             # --- PROCESAMIENTO DE FECHAS ---
+            # Buscar columna que contenga "INGRESO" (puede llamarse FECHA_INGRESO, INGRESO, etc.)
             col_fecha = next((c for c in df.columns if "INGRESO" in c.upper()), None)
-            fecha_ingreso_str = formatear_fecha_texto(fila[col_fecha]) if col_fecha else ""
+            if col_fecha is not None:
+                fecha_ingreso_str = formatear_fecha_texto(fila[col_fecha])
+            else:
+                fecha_ingreso_str = ""
+                
             fecha_examenes_str = formatear_fecha_texto(request.POST.get("fecha_examenes"))
             fecha_inicio_labores = formatear_fecha_texto(request.POST.get("fecha_inicio_labores"))
             fecha_terminacion = formatear_fecha_texto(request.POST.get("fecha_terminacion"))
@@ -80,7 +84,8 @@ def generar_word(request):
             # --- FORMATEO DE SALARIO ---
             salario_raw = request.POST.get("salario_mensual", "0")
             try:
-                salario_limpio = "".join(filter(str.isdigit, salario_raw))
+                # Asegurar que sea string y eliminar cualquier caracter no dígito
+                salario_limpio = "".join(filter(str.isdigit, str(salario_raw)))
                 salario_formateado = "{:,}".format(int(salario_limpio)).replace(",", ".")
             except:
                 salario_formateado = salario_raw
@@ -163,7 +168,7 @@ def generar_word(request):
 
             zip_buffer.seek(0)
             if zip_buffer.getbuffer().nbytes < 100:
-                 messages.warning(request, "No seleccionaste ningún archivo.")
+                 messages.warning(request, "No se pudo generar ningún archivo. Verifica que hayas seleccionado al menos un tipo de documento.")
                  return redirect('subir_excel_view')
 
             response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
@@ -171,7 +176,7 @@ def generar_word(request):
             return response
 
         except Exception as e:
-            messages.error(request, f"Error: {str(e)}")
+            messages.error(request, f"Error al generar documentos: {str(e)}")
             return redirect('subir_excel_view')
 
     # Si alguien entra a /colaboradores/ por GET, lo mandamos a subir el archivo
