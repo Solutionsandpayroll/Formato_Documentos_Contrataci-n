@@ -30,8 +30,11 @@ def subir_excel(request):
 
         try:
             df = pd.read_excel(excel)
-            # Convertimos a JSON para persistirlo en el HTML (campo oculto)
+            # Convertimos a JSON para persistirlo en la sesión
             excel_json = df.to_json(date_format='iso', orient='split')
+            
+            # Guardamos en la sesión (usamos una clave única, por ejemplo 'excel_data')
+            request.session['excel_data'] = excel_json
             
             personas = []
             for i, f in df.iterrows():
@@ -46,7 +49,7 @@ def subir_excel(request):
             
             return render(request, "seleccionar_persona.html", {
                 "personas": personas,
-                "excel_data_input": excel_json
+                # Ya no enviamos el JSON al template
             })
         except Exception as e:
             messages.error(request, f"Error al procesar Excel: {str(e)}")
@@ -56,13 +59,16 @@ def subir_excel(request):
 
 def generar_word(request):
     """ Vista que genera el ZIP con los documentos """
-    # Recuperamos el JSON que viene desde el campo oculto del formulario
-    excel_data_raw = request.POST.get("excel_data_input")
-    
-    if request.method == "POST" and excel_data_raw:
+    if request.method == "POST":
         try:
+            # Recuperamos el JSON de la sesión
+            excel_json = request.session.get('excel_data')
+            if not excel_json:
+                messages.error(request, "No se encontraron datos del Excel en la sesión. Por favor, vuelve a cargar el archivo.")
+                return redirect('subir_excel_view')
+
             # Reconstruimos el DataFrame desde el string JSON
-            df = pd.read_json(io.StringIO(excel_data_raw), orient='split')
+            df = pd.read_json(io.StringIO(excel_json), orient='split')
             idx = int(request.POST.get("persona_index"))
             fila = df.iloc[idx]
             
@@ -70,7 +76,6 @@ def generar_word(request):
             tipo_contrato_seleccionado = request.POST.get("tipo_contrato")
 
             # --- PROCESAMIENTO DE FECHAS ---
-            # Buscar columna que contenga "INGRESO" (puede llamarse FECHA_INGRESO, INGRESO, etc.)
             col_fecha = next((c for c in df.columns if "INGRESO" in c.upper()), None)
             if col_fecha is not None:
                 fecha_ingreso_str = formatear_fecha_texto(fila[col_fecha])
@@ -84,7 +89,6 @@ def generar_word(request):
             # --- FORMATEO DE SALARIO ---
             salario_raw = request.POST.get("salario_mensual", "0")
             try:
-                # Asegurar que sea string y eliminar cualquier caracter no dígito
                 salario_limpio = "".join(filter(str.isdigit, str(salario_raw)))
                 salario_formateado = "{:,}".format(int(salario_limpio)).replace(",", ".")
             except:
@@ -149,7 +153,7 @@ def generar_word(request):
             elif tipo_contrato_seleccionado == "Fijo Integral":
                 mapa_plantillas["CONTRATO"] = "EmploymentContract_FixedTerm_Integral Salary-copia.docx"
             elif tipo_contrato_seleccionado == "Fijo":
-                mapa_plantillas["CONTRATO"] = "EmployementContract_FixedTerm_Ordinary Salary-copia.docx"
+                mapa_plantillas["CONTRATO"] = "EmploymentContract_FixedTerm_Ordinary Salary-copia.docx"  # Corregido
 
             seleccionados = request.POST.getlist("archivos_a_generar")
             
@@ -179,5 +183,5 @@ def generar_word(request):
             messages.error(request, f"Error al generar documentos: {str(e)}")
             return redirect('subir_excel_view')
 
-    # Si alguien entra a /colaboradores/ por GET, lo mandamos a subir el archivo
+    # Si alguien entra por GET, redirigir
     return redirect('subir_excel_view')
