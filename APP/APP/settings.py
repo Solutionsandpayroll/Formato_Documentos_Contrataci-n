@@ -69,10 +69,10 @@ TEMPLATES = [
 ]
 
 # Cambia esto:
-ROOT_URLCONF = 'APP.APP.urls'
+ROOT_URLCONF = 'APP.urls'
 
 # Cambia esto:
-WSGI_APPLICATION = 'APP.APP.wsgi.application'
+WSGI_APPLICATION = 'APP.wsgi.application'
 
 
 # Database
