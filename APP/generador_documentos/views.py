@@ -27,12 +27,11 @@ def subir_excel(request):
         excel = request.FILES["archivo_excel"]
         if not excel.name.endswith(('.xlsx', '.xls')):
             messages.error(request, "¡Formato inválido! Solo se permiten archivos .xlsx o .xls")
-            return redirect('subir_excel')
+            return redirect('subir_excel_view')
 
         try:
             df = pd.read_excel(excel)
-            # Convertimos el DF a JSON para pasarlo al template (campo oculto)
-            # Esto evita usar session
+            # Convertimos el DF a JSON para pasarlo al template
             excel_json = df.to_json(date_format='iso', orient='split')
             
             personas = []
@@ -48,27 +47,27 @@ def subir_excel(request):
             
             return render(request, "seleccionar_persona.html", {
                 "personas": personas,
-                "excel_data_input": excel_json # Pasamos la data al HTML
+                "excel_data_input": excel_json 
             })
         except Exception as e:
             messages.error(request, f"Error al procesar Excel: {str(e)}")
-            return redirect('subir_excel')
+            return redirect('subir_excel_view')
 
     return render(request, "subir_excel.html")
 
 
 def generar_word(request):
     """ VISTA 2: Recibe los datos del formulario y el JSON del excel original """
-    # En lugar de buscar en session, buscamos en el POST
+    # Recuperamos el JSON del campo oculto enviado por POST
     excel_data_raw = request.POST.get("excel_data_input")
     
-    if not excel_data_raw and request.method == "POST":
-        messages.error(request, "No hay datos de Excel para procesar.")
-        return redirect('subir_excel')
+    if not excel_data_raw:
+        # Si no hay datos (ej. recarga de página directa), volvemos al inicio
+        return redirect('subir_excel_view')
 
     if request.method == "POST":
         try:
-            # Reconstruimos el DataFrame desde el input oculto del formulario
+            # Reconstruimos el DataFrame desde el input oculto
             df = pd.read_json(io.StringIO(excel_data_raw), orient='split')
             idx = int(request.POST.get("persona_index"))
             fila = df.iloc[idx]
@@ -91,7 +90,7 @@ def generar_word(request):
             except:
                 salario_formateado = salario_raw
 
-            # --- PROCESAMIENTO LUGAR Y FECHA NACIMIENTO ---
+            # --- PROCESAMIENTO NACIMIENTO ---
             lugar_nac = request.POST.get("lugar_nacimiento", "")
             fecha_nac_raw = request.POST.get("fecha_nacimiento", "")
             fecha_nac_texto = formatear_fecha_texto(fecha_nac_raw)
@@ -169,8 +168,8 @@ def generar_word(request):
 
             zip_buffer.seek(0)
             if zip_buffer.getbuffer().nbytes < 100:
-                 messages.warning(request, "No seleccionaste ningún archivo para generar.")
-                 return redirect('subir_excel')
+                 messages.warning(request, "No seleccionaste ningún archivo.")
+                 return redirect('subir_excel_view')
 
             response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
             response["Content-Disposition"] = f'attachment; filename="Docs_{nombre_completo.replace(" ","_")}.zip"'
@@ -178,6 +177,6 @@ def generar_word(request):
 
         except Exception as e:
             messages.error(request, f"Error: {str(e)}")
-            return redirect('subir_excel')
+            return redirect('subir_excel_view')
 
-    return redirect('subir_excel')
+    return redirect('subir_excel_view')
