@@ -53,10 +53,13 @@ MIDDLEWARE = [
 ]
 
 
+# En APP/APP/settings.py
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': ["template"],
+        # Forzamos a que busque en la ruta correcta usando BASE_DIR
+        'DIRS': [os.path.join(BASE_DIR, "template")], 
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
