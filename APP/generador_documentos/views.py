@@ -2,32 +2,12 @@ import io
 import os
 import pandas as pd
 import zipfile
+import json
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.contrib import messages
 from django.conf import settings
 from docxtpl import DocxTemplate
-
-def subir_excel(request):
-    """ VISTA 1: Maneja la carga del archivo Excel """
-    if request.method == "POST" and "archivo_excel" in request.FILES:
-        excel = request.FILES["archivo_excel"]
-        if not excel.name.endswith(('.xlsx', '.xls')):
-            messages.error(request, "¡Formato inválido! Solo se permiten archivos .xlsx o .xls")
-            return redirect('subir_excel_view')
-
-        try:
-            df = pd.read_excel(excel)
-            request.session["excel_data"] = df.to_json(date_format='iso')
-            request.session["excel_nombre"] = excel.name 
-            messages.success(request, f"El archivo '{excel.name}' se cargó correctamente.")
-            return redirect('generar_word')
-        except Exception as e:
-            messages.error(request, f"Error al procesar Excel: {str(e)}")
-            return redirect('subir_excel_view')
-
-    return render(request, "subir_excel.html")
-
 
 def formatear_fecha_texto(fecha_raw):
     """ Función auxiliar para convertir fecha a formato: 13 de marzo de 2026 """
@@ -41,14 +21,55 @@ def formatear_fecha_texto(fecha_raw):
     except:
         return str(fecha_raw)
 
+def subir_excel(request):
+    """ VISTA 1: Procesa el Excel y muestra la lista de personas directamente """
+    if request.method == "POST" and "archivo_excel" in request.FILES:
+        excel = request.FILES["archivo_excel"]
+        if not excel.name.endswith(('.xlsx', '.xls')):
+            messages.error(request, "¡Formato inválido! Solo se permiten archivos .xlsx o .xls")
+            return redirect('subir_excel')
+
+        try:
+            df = pd.read_excel(excel)
+            # Convertimos el DF a JSON para pasarlo al template (campo oculto)
+            # Esto evita usar session
+            excel_json = df.to_json(date_format='iso', orient='split')
+            
+            personas = []
+            for i, f in df.iterrows():
+                nombre = f"{f.get('NOMBRE1','')} {f.get('NOMBRE 2','')} {f.get('APELLIDO1','')} {f.get('APELLIDO 2','')}".replace('nan','').strip().upper()
+                personas.append({
+                    "index": i, 
+                    "nombre": " ".join(nombre.split()), 
+                    "identificacion": str(f.get("IDENTIFICACIÓN", f.get("IDENTIFICACION", ""))), 
+                    "cargo": str(f.get("CARGO", "")),
+                    "direccion": str(f.get("DIRECCION", "")),
+                })
+            
+            return render(request, "seleccionar_persona.html", {
+                "personas": personas,
+                "excel_data_input": excel_json # Pasamos la data al HTML
+            })
+        except Exception as e:
+            messages.error(request, f"Error al procesar Excel: {str(e)}")
+            return redirect('subir_excel')
+
+    return render(request, "subir_excel.html")
+
+
 def generar_word(request):
-    """ VISTA 2: Formulario y descarga de ZIP con selección dinámica de archivos """
-    if "excel_data" not in request.session:
-        return redirect('subir_excel_view')
+    """ VISTA 2: Recibe los datos del formulario y el JSON del excel original """
+    # En lugar de buscar en session, buscamos en el POST
+    excel_data_raw = request.POST.get("excel_data_input")
+    
+    if not excel_data_raw and request.method == "POST":
+        messages.error(request, "No hay datos de Excel para procesar.")
+        return redirect('subir_excel')
 
     if request.method == "POST":
         try:
-            df = pd.read_json(io.StringIO(request.session["excel_data"]))
+            # Reconstruimos el DataFrame desde el input oculto del formulario
+            df = pd.read_json(io.StringIO(excel_data_raw), orient='split')
             idx = int(request.POST.get("persona_index"))
             fila = df.iloc[idx]
             
@@ -62,10 +83,9 @@ def generar_word(request):
             fecha_inicio_labores = formatear_fecha_texto(request.POST.get("fecha_inicio_labores"))
             fecha_terminacion = formatear_fecha_texto(request.POST.get("fecha_terminacion"))
 
-            # --- FORMATEO DE SALARIO (300000 -> 300.000) ---
+            # --- FORMATEO DE SALARIO ---
             salario_raw = request.POST.get("salario_mensual", "0")
             try:
-                # Quitamos cualquier caracter que no sea número por si el usuario metió puntos
                 salario_limpio = "".join(filter(str.isdigit, salario_raw))
                 salario_formateado = "{:,}".format(int(salario_limpio)).replace(",", ".")
             except:
@@ -75,7 +95,6 @@ def generar_word(request):
             lugar_nac = request.POST.get("lugar_nacimiento", "")
             fecha_nac_raw = request.POST.get("fecha_nacimiento", "")
             fecha_nac_texto = formatear_fecha_texto(fecha_nac_raw)
-            # Combinamos para el tag {{ nacimiento_detalles }} que ya usas en el Word
             nacimiento_detalles = f"{lugar_nac}, {fecha_nac_texto}" if lugar_nac and fecha_nac_texto else (lugar_nac or fecha_nac_texto)
 
             # --- HARDWARE ---
@@ -117,7 +136,6 @@ def generar_word(request):
                 "u_otro_val": request.POST.get("ubicacion_otro_texto", ""),
             }
 
-            # --- MAPEO DE PLANTILLAS ---
             mapa_plantillas = {
                 "NDA": "NDA-copia.docx",
                 "HOME_OFFICE": "Homme Ofice Agreement-copia.docx",
@@ -152,7 +170,7 @@ def generar_word(request):
             zip_buffer.seek(0)
             if zip_buffer.getbuffer().nbytes < 100:
                  messages.warning(request, "No seleccionaste ningún archivo para generar.")
-                 return redirect('generar_word')
+                 return redirect('subir_excel')
 
             response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
             response["Content-Disposition"] = f'attachment; filename="Docs_{nombre_completo.replace(" ","_")}.zip"'
@@ -160,18 +178,6 @@ def generar_word(request):
 
         except Exception as e:
             messages.error(request, f"Error: {str(e)}")
-            return redirect('generar_word')
+            return redirect('subir_excel')
 
-    # GET: Listar personas
-    df = pd.read_json(io.StringIO(request.session["excel_data"]))
-    personas = []
-    for i, f in df.iterrows():
-        nombre = f"{f.get('NOMBRE1','')} {f.get('NOMBRE 2','')} {f.get('APELLIDO1','')} {f.get('APELLIDO 2','')}".replace('nan','').strip().upper()
-        personas.append({
-            "index": i, 
-            "nombre": " ".join(nombre.split()), 
-            "identificacion": str(f.get("IDENTIFICACIÓN", f.get("IDENTIFICACION", ""))), 
-            "cargo": str(f.get("CARGO", "")),
-            "direccion": str(f.get("DIRECCION", "")),
-        })
-    return render(request, "seleccionar_persona.html", {"personas": personas})
+    return redirect('subir_excel')

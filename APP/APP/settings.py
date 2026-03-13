@@ -125,6 +125,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')] # Si tienes una carpeta static propia
 
 # MEDIA no se puede usar directamente en Serverless
 # Comentamos para pruebas
@@ -132,3 +133,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 ALLOWED_HOSTS = ["*"]
+
+
+# Las sesiones se guardarán en memoria, no en la DB
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
